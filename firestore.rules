@@ -1,0 +1,157 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: users
+    // Document ID: {uid}
+    // Fields:
+    //   - uid: string (required) - Unique ID for the user.
+    //   - email: string (required, email format) - User's email address.
+    //   - displayName: string (required) - User's display name.
+    //   - photoURL: string (optional, uri format) - User's profile picture URL.
+    //   - preferredTranslation: string (required, enum: ['NIV', 'KJV', 'ESV', 'NASB', 'NKJV', 'NLT', 'BSB']) - User's preferred translation.
+    //   - createdAt: string (required, date-time format) - When the profile was created.
+    //   - role: string (optional, enum: ['admin', 'user']) - User's role.
+    //
+    // Collection: notes
+    // Document ID: {noteId}
+    // Fields:
+    //   - id: string (required) - Unique ID for the note.
+    //   - uid: string (required) - ID of the user who owns the note.
+    //   - title: string (required) - Title of the note.
+    //   - content: string (required) - Content of the note in Markdown.
+    //   - verseReference: string (optional) - Bible verse reference.
+    //   - createdAt: string (required, date-time format) - When the note was created.
+    //   - updatedAt: string (required, date-time format) - When the note was last updated.
+    //
+    // Collection: memorization
+    // Document ID: {verseId}
+    // Fields:
+    //   - id: string (required) - Unique ID for the entry.
+    //   - uid: string (required) - ID of the user who owns the entry.
+    //   - reference: string (required) - Bible verse reference.
+    //   - text: string (required) - Full text of the verse.
+    //   - status: string (required, enum: ['learning', 'mastered']) - Current status.
+    //   - createdAt: string (required, date-time format) - When the entry was created.
+    //
+    // Collection: chats
+    // Document ID: {chatId}
+    // Fields:
+    //   - id: string (required) - Unique ID for the chat.
+    //   - uid: string (required) - ID of the user who owns the chat.
+    //   - title: string (required) - Title of the conversation.
+    //   - messages: list (required) - Array of message objects.
+    //   - createdAt: string (required, date-time format) - When the chat was created.
+    //   - updatedAt: string (required, date-time format) - When the chat was last updated.
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isDocOwner() {
+      return isAuthenticated() && request.auth.uid == resource.data.uid;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() &&
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
+          (request.auth.token.email == "blazingwalkthroughts@gmail.com" && request.auth.token.email_verified == true));
+    }
+
+    function isValidEmail(email) {
+      return email is string && email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
+    }
+
+    function isValidDateString(dateStr) {
+      return dateStr is string && dateStr.matches("^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}.*Z?$");
+    }
+
+    // ===============================================================
+    // Domain Validators
+    // ===============================================================
+    function isValidUser(data) {
+      return data.keys().hasOnly(['uid', 'email', 'displayName', 'photoURL', 'preferredTranslation', 'isDarkMode', 'aiSourceMode', 'customInstructions', 'createdAt', 'role']) &&
+             data.uid == request.auth.uid &&
+             isValidEmail(data.email) &&
+             data.displayName is string && data.displayName.size() > 0 && data.displayName.size() < 100 &&
+             data.preferredTranslation in ['NIV', 'KJV', 'ESV', 'NASB', 'NKJV', 'NLT', 'AMP', 'BSB'] &&
+             data.isDarkMode is bool &&
+             data.aiSourceMode in ['scripture-only', 'theology', 'web-search'] &&
+             data.customInstructions is string && data.customInstructions.size() < 2000 &&
+             isValidDateString(data.createdAt);
+    }
+
+    function isValidNote(data) {
+      return data.keys().hasOnly(['id', 'uid', 'title', 'content', 'verseReference', 'createdAt', 'updatedAt']) &&
+             data.uid == request.auth.uid &&
+             data.title is string && data.title.size() > 0 && data.title.size() < 200 &&
+             data.content is string && data.content.size() < 10000 &&
+             isValidDateString(data.createdAt) &&
+             isValidDateString(data.updatedAt);
+    }
+
+    function isValidMemorization(data) {
+      return data.keys().hasOnly(['id', 'uid', 'reference', 'text', 'status', 'createdAt']) &&
+             data.uid == request.auth.uid &&
+             data.reference is string && data.reference.size() > 0 && data.reference.size() < 100 &&
+             data.text is string && data.text.size() > 0 && data.text.size() < 2000 &&
+             data.status in ['learning', 'mastered'] &&
+             isValidDateString(data.createdAt);
+    }
+
+    function isValidChat(data) {
+      return data.keys().hasOnly(['id', 'uid', 'title', 'messages', 'createdAt', 'updatedAt']) &&
+             data.uid == request.auth.uid &&
+             data.title is string && data.title.size() > 0 && data.title.size() < 500 &&
+             data.messages is list && data.messages.size() < 100 &&
+             isValidDateString(data.createdAt) &&
+             isValidDateString(data.updatedAt);
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+    match /users/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow create: if isAuthenticated() && isValidUser(request.resource.data) && (request.resource.data.role == 'user' || isAdmin());
+      allow update: if isAuthenticated() && isValidUser(request.resource.data) && (request.resource.data.role == resource.data.role || isAdmin());
+    }
+
+    match /notes/{noteId} {
+      allow read: if isDocOwner() || isAdmin();
+      allow create: if isAuthenticated() && isValidNote(request.resource.data);
+      allow update: if isDocOwner() && isValidNote(request.resource.data) && request.resource.data.createdAt == resource.data.createdAt;
+      allow delete: if isDocOwner() || isAdmin();
+    }
+
+    match /memorization/{verseId} {
+      allow read: if isDocOwner() || isAdmin();
+      allow create: if isAuthenticated() && isValidMemorization(request.resource.data);
+      allow update: if isDocOwner() && isValidMemorization(request.resource.data) && request.resource.data.createdAt == resource.data.createdAt;
+      allow delete: if isDocOwner() || isAdmin();
+    }
+
+    match /chats/{chatId} {
+      allow read: if isDocOwner() || isAdmin();
+      allow create: if isAuthenticated() && isValidChat(request.resource.data);
+      allow update: if isDocOwner() && isValidChat(request.resource.data) && request.resource.data.createdAt == resource.data.createdAt;
+      allow delete: if isDocOwner() || isAdmin();
+    }
+
+    match /{path=**} {
+      allow read, write: if false;
+    }
+  }
+}

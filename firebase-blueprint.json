@@ -1,0 +1,92 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "User Profile",
+      "description": "Stores user information and preferences.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "Unique identifier for the user." },
+        "email": { "type": "string", "format": "email", "description": "User's email address." },
+        "displayName": { "type": "string", "description": "User's display name." },
+        "photoURL": { "type": "string", "format": "uri", "description": "URL to the user's profile picture." },
+        "preferredTranslation": { "type": "string", "enum": ["NIV", "KJV", "ESV", "NASB", "NKJV", "NLT", "AMP", "BSB"], "description": "User's preferred Bible translation." },
+        "isDarkMode": { "type": "boolean", "description": "User's preferred theme mode." },
+        "aiSourceMode": { "type": "string", "enum": ["scripture-only", "theology", "web-search"], "description": "AI's source of information mode." },
+        "customInstructions": { "type": "string", "description": "Custom instructions for the AI assistant." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "When the profile was created." }
+      },
+      "required": ["uid", "email", "displayName", "createdAt", "preferredTranslation", "isDarkMode", "aiSourceMode", "customInstructions"]
+    },
+    "Note": {
+      "title": "Study Note",
+      "description": "A personal note taken by a user during Bible study or research.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique ID for the note." },
+        "uid": { "type": "string", "description": "ID of the user who owns the note." },
+        "title": { "type": "string", "description": "Title of the note." },
+        "content": { "type": "string", "description": "Content of the note in Markdown." },
+        "verseReference": { "type": "string", "description": "Optional Bible verse reference associated with the note." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "When the note was created." },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "When the note was last updated." }
+      },
+      "required": ["id", "uid", "title", "content", "createdAt", "updatedAt"]
+    },
+    "MemorizationVerse": {
+      "title": "Memorization Verse",
+      "description": "A Bible verse the user is trying to memorize.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique ID for the memorization entry." },
+        "uid": { "type": "string", "description": "ID of the user who owns the entry." },
+        "reference": { "type": "string", "description": "Bible verse reference (e.g., John 3:16)." },
+        "text": { "type": "string", "description": "Full text of the verse." },
+        "status": { "type": "string", "enum": ["learning", "mastered"], "description": "Current status of memorization." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "When the entry was created." }
+      },
+      "required": ["id", "uid", "reference", "text", "status", "createdAt"]
+    },
+    "Chat": {
+      "title": "Apologetics Chat",
+      "description": "A saved conversation with the Apologetics Assistant.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique ID for the chat." },
+        "uid": { "type": "string", "description": "ID of the user who owns the chat." },
+        "title": { "type": "string", "description": "Title of the conversation (usually the first question)." },
+        "messages": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "role": { "type": "string", "enum": ["user", "assistant"] },
+              "content": { "type": "string" },
+              "timestamp": { "type": "string", "format": "date-time" }
+            }
+          }
+        },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "uid", "title", "messages", "createdAt", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "/users/{uid}": {
+      "schema": "UserProfile",
+      "description": "User profile documents."
+    },
+    "/notes/{noteId}": {
+      "schema": "Note",
+      "description": "User study notes."
+    },
+    "/memorization/{verseId}": {
+      "schema": "MemorizationVerse",
+      "description": "User memorization verses."
+    },
+    "/chats/{chatId}": {
+      "schema": "Chat",
+      "description": "User chat history."
+    }
+  }
+}
